@@ -154,27 +154,27 @@
       import { randomBytes, createHash } from "node:crypto";
       import { SignJWT, exportJWK, importPKCS8, importSPKI } from "jose";
       import fs from "node:fs";
-      
+
       const app = express();
       app.use(bodyParser.urlencoded({ extended: false }));
       app.use(bodyParser.json());
       app.use(cookieParser());
-      
+
       const clients = new Map();
       const authorizationCodes = new Map();
       const refreshTokens = new Map();
-      
+
       clients.set("demo-client", {
         client_id: "demo-client",
         redirectUris: ["http://localhost:4000/callback"],
       });
-      
+
       const PRIVATE_KEY_PEM = fs.readFileSync("./private.pem", "utf8");
       //const PUBLIC_KEY_PEM = fs.readFileSync("./public.pem", "utf8");
-      
+
       const ISSUER = "http://localhost:3000";
       const KEY_ID = "demo-key-1";
-      
+
       function base64url(input) {
         return (
           input
@@ -185,20 +185,20 @@
             .replace(/=+$/g, "")
         );
       }
-      
+
       function sha256Base64url(str) {
         const hash = createHash("sha256").update(str).digest();
         return base64url(hash);
       }
-      
+
       function generateCode() {
         return base64url(randomBytes(32));
       }
-      
+
       function getDemoUser() {
         return { sub: "alice", name: "Alice Example", email: "alice@example.com" };
       }
-      
+
       app.get("/authorize", (req, res) => {
         const {
           response_type,
@@ -209,7 +209,7 @@
           code_challenge,
           code_challenge_method,
         } = req.query;
-      
+
         // Basic validation
         const client = clients.get(client_id);
         if (!client) return res.status(400).send("Unknown client_id");
@@ -224,11 +224,11 @@
               "PKCE required: provide code_challenge and code_challenge_method=S256"
             );
         }
-      
+
         // Normally: show login + consent UI.
         // For tutorial simplicity: auto-login + auto-consent.
         const user = getDemoUser();
-      
+
         const code = generateCode();
         authorizationCodes.set(code, {
           clientId: client_id,
@@ -238,14 +238,14 @@
           user,
           expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
         });
-      
+
         const redirect = new URL(redirect_uri);
         redirect.searchParams.set("code", code);
         if (state) redirect.searchParams.set("state", state);
-      
+
         res.redirect(redirect.toString());
       });
-      
+
       /**
        * POST /token
        * Supports:
@@ -254,10 +254,10 @@
        */
       app.post("/token", async (req, res) => {
         const { grant_type } = req.body;
-      
+
         if (grant_type === "authorization_code") {
           const { code, redirect_uri, client_id, code_verifier } = req.body;
-      
+
           const record = authorizationCodes.get(code);
           if (!record)
             return res
@@ -274,7 +274,7 @@
               .status(400)
               .json({ error: "invalid_grant", error_description: "Client mismatch" });
           }
-      
+
           // PKCE validation
           const computedChallenge = sha256Base64url(code_verifier);
           if (computedChallenge !== record.codeChallenge) {
@@ -283,13 +283,13 @@
               error_description: "PKCE validation failed",
             });
           }
-      
+
           // One-time use code
           authorizationCodes.delete(code);
-      
+
           // Create JWT access token
           const privateKey = await importPKCS8(PRIVATE_KEY_PEM, "RS256");
-      
+
           const accessToken = await new SignJWT({
             scope: record.scope,
             name: record.user.name,
@@ -302,14 +302,14 @@
             .setIssuedAt()
             .setExpirationTime("15m")
             .sign(privateKey);
-      
+
           const refresh_token = generateCode();
           refreshTokens.set(refresh_token, {
             sub: record.user.sub,
             scope: record.scope,
             clientId: client_id,
           });
-      
+
           return res.json({
             access_token: accessToken,
             token_type: "Bearer",
@@ -318,16 +318,16 @@
             scope: record.scope,
           });
         }
-      
+
         if (grant_type === "refresh_token") {
           const { refresh_token, client_id } = req.body;
           const record = refreshTokens.get(refresh_token);
           if (!record) return res.status(400).json({ error: "invalid_grant" });
           if (record.clientId !== client_id)
             return res.status(400).json({ error: "invalid_grant" });
-      
+
           const privateKey = await importPKCS8(PRIVATE_KEY_PEM, "RS256");
-      
+
           const accessToken = await new SignJWT({ scope: record.scope })
             .setProtectedHeader({ alg: "RS256", kid: KEY_ID })
             .setIssuer(ISSUER)
@@ -336,38 +336,152 @@
             .setIssuedAt()
             .setExpirationTime("15m")
             .sign(privateKey);
-      
+
           return res.json({
             access_token: accessToken,
             token_type: "Bearer",
             expires_in: 900,
           });
         }
-      
+
         res.status(400).json({ error: "unsupported_grant_type" });
       });
-      
+
       /**
        * JWKS endpoint:
        * Resource servers fetch public keys here to validate JWT signatures.
        */
       app.get("/.well-known/jwks.json", async (req, res) => {
         const privateKey = await importSPKI(PRIVATE_KEY_PEM, "RS256");
-      
+
         // jose export JWK from a key object, but we need public JWK
         // For tutorial simplicity, jose can export from private key too (it includes public parts)
         const jwk = await exportJWK(privateKey); //25.24
-      
+
         jwk.use = "sig";
         jwk.alg = "RS256";
         jwk.kid = KEY_ID;
-      
+
         res.status(200).json({
           keys: [jwk],
         });
       });
-      
+
       app.listen(3000, () => {
         console.log("Auth Server running on http://localhost:3000");
+      });
+    ```
+- **Resource-Server**
+  - What we can do with this one is that and now we'll have to have this server is the protecte API. It will like kind of read authorization bearer token. it will fetch the JWKS from author server. It will also verify token signature plus issuer plus audience plus expiry all of that kind of good stuff. Also allow requist only if token is valid. so We´ll have to install the dependencies.
+
+  - Crear carpeta *resource-server* <code>mkdir resource-server</code>
+  - Crear package.json <code>pnpm init</code>
+  - Agregar al package.json el type: <code>"type": "module"</code>
+  - Agregar paquetes 
+    ```bash
+        pnpm add express jose
+    ```
+  - Agregar index.js
+
+  - Actualizar index.js
+    ```js
+      // Este código corresponde a un Servidor de Recursos (API). Su función es proteger datos privados y solo entregarlos si el cliente presenta un Access Token (JWT) válido, emitido por el servidor de autorización que analizamos anteriormente.
+
+      // IMPORTACIONES
+      import express from "express"; // Framework para crear el servidor y definir las rutas de la API.
+
+      // jwtVerify: para validar la firma del token.
+      // createRemoteJWKSet: para obtener la llave pública automáticamente desde el servidor de identidad.
+      import { jwtVerify, createRemoteJWKSet } from "jose";
+
+      const app = express();
+      app.use(express.json()); // Middleware para que la API pueda entender cuerpos de peticiones en formato JSON.
+
+      // CONFIGURACIÓN DE SEGURIDAD
+      const ISSUER = "http://localhost:3000"; // La URL del servidor que emitió el token (debe coincidir exactamente).
+      const AUDIENCE = "demo-client"; // El ID del cliente para el que fue emitido el token (evita que un token de la App A se use en la App B).
+      const JWKS_URL = new URL("http://localhost:3000/.well-known/jwks.json"); // Dirección donde el servidor de recursos baja la llave pública para verificar tokens.
+
+      // Crea un conjunto de llaves remotas. Esto permite que el servidor valide el JWT sin tener la llave guardada localmente;
+      // la descarga de la URL y la mantiene en caché.
+      const JWKS = createRemoteJWKSet(JWKS_URL);
+
+      /**
+       * MIDDLEWARE: requireAuth
+       * Se encarga de interceptar la petición y verificar si el usuario está autenticado.
+       */
+      async function requireAuth(req, res, next) {
+        const auth = req.headers.authorization; // Busca el encabezado "Authorization".
+        // Verifica si el encabezado existe y si usa el esquema "Bearer ".
+        if (!auth || !auth.startsWith("Bearer ")) {
+          return res.status(401).json({ error: "missing_token" }); // Si no hay token, detiene la petición con error 401 (No autorizado).
+        }
+
+        const token = auth.slice("Bearer ".length); // Extrae solo la cadena del token (quita la palabra "Bearer ").
+
+        try {
+          // VALIDA EL TOKEN:
+          // 1. Verifica la firma con las llaves del JWKS.
+          // 2. Revisa que no haya expirado.
+          // 3. Comprueba que el ISSUER y AUDIENCE sean correctos.
+          const { payLoad } = await jwtVerify(token, JWKS, {
+            issuer: ISSUER,
+            audience: AUDIENCE,
+          });
+
+          // Si todo es correcto, guarda la información del usuario (payload) dentro del objeto 'req'
+          // para que las siguientes funciones puedan usarla.
+          req.user = payLoad;
+          next(); // Permite que la petición continúe al siguiente paso.
+        } catch (err) {
+          // Si el token es falso, expiró o está mal formado, devuelve un error.
+          return res
+            .status(401)
+            .json({ error: "invalid_token", message: err.message });
+        }
+      }
+
+      /**
+       * MIDDLEWARE: requireScope
+       * Verifica si el usuario tiene permiso (permisos específicos llamados 'scopes') para hacer una acción.
+       */
+
+      function requireScope(scope) {
+        return (req, res, next) => {
+          // Convierte el string de scopes del token (ej: "api.read profile") en un array para buscar fácilmente.
+          const scopes = String(req.user?.scope || "")
+            .split(" ")
+            .filter(Boolean);
+
+          // Si el array de scopes del usuario no incluye el scope requerido por la ruta, deniega el acceso.
+          if (!scopes.includes(scope)) {
+            return res
+              .status(403)
+              .json({ error: "insufficient_scope", required: scope }); // 403 significa "Prohibido" (autenticado pero sin permiso).
+          }
+          next(); // El usuario tiene permiso, continúa a la ruta.
+        };
+      }
+
+      /**
+       * RUTA PROTEGIDA: /api/profile
+       * Esta ruta requiere que el usuario esté autenticado Y tenga el permiso "api.read".
+       */
+      app.get("/api/profile", requireAuth, requireScope("api.read"), (req, res) => {
+        // Si llegamos aquí, el token es válido y el permiso existe.
+        res.json({
+          message: "Protected profile data",
+          user: {
+            sub: req.user.sub, // ID único del usuario.
+            name: req.user.name, // Nombre del usuario (extraído del JWT).
+            email: req.user.email, // Email del usuario (extraído del JWT).
+            scope: req.user.scope, // Scopes que tiene permitidos.
+          },
+        });
+      });
+
+      // El servidor de recursos corre en un puerto distinto (5000) para no chocar con el de autorización (3000).
+      app.listen(5000, () => {
+        console.log("Resource Server running on http://localhost:5000");
       });
     ```
