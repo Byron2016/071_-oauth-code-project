@@ -135,7 +135,13 @@
   - Crear carpeta *auth-server* <code>mkdir auth-server</code>
   - Crear package.json <code>pnpm init</code>
   - Agregar al package.json el type: <code>"type": "module"</code>
-  - Agregar script <code>""start": "node index.js"</code>
+  - Agregar script 
+    ```json
+      "scripts": {
+        "start": "node index_auth_server.js",
+        "dev": "node --watch index_auth_server.js"
+      },
+    ```
   - Agregar paquetes 
     ```bash
         pnpm add express cookie-parser body-parser jose
@@ -144,7 +150,23 @@
   - Generar private key
     ```bash
         openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.pem
+          # 1. Generación de la llave (El "Qué")
+          # ¿Qué hace?: Crea una nueva llave privada utilizando el algoritmo RSA.
+          # Parámetros clave:
+          # -algorithm RSA: Define el tipo de criptografía.
+          # rsa_keygen_bits:2048: Establece el tamaño de la llave. 2048 bits es el estándar actual de seguridad recomendado; es lo suficientemente fuerte para ser seguro pero rápido para procesar.
+          # -out private.pem: Guarda el resultado en un archivo llamado private.pem.
+          # Resultado: Obtienes una llave en formato PKCS#1 (identificable porque el archivo empieza con -----BEGIN RSA PRIVATE KEY-----).
         openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in private.pem -out private_pkcs8.pem
+          # 2. Conversión a PKCS#8 (El "Para qué")
+          # ¿Qué hace?: Toma la llave anterior y la envuelve en una estructura llamada PKCS#8.
+          # Parámetros clave:
+          # -topk8: Indica que queremos convertir a PKCS#8.
+          # -nocrypt: Especifica que la llave de salida no estará protegida por contraseña (estará en texto plano dentro del formato PEM).
+          # -in / -out: Define el archivo de entrada y el nuevo archivo de salida.
+          # Resultado: El archivo empieza con -----BEGIN PRIVATE KEY----- (nota que ya no dice "RSA").
+        openssl rsa -in private.pem -pubout -out public_spki.pem
+          # Genera la clave pública en base a la PKCS#8
     ```
 
   - Actualizar index.js
@@ -372,13 +394,56 @@
         console.log("Auth Server running on http://localhost:3000");
       });
     ```
+
+  - Errores
+    - TypeError: "spki" must be SPKI formatted string 
+      - Este error es muy común cuando trabajas con Node.js (especialmente con la librería crypto o jsonwebtoken) o con Web Crypto API.
+
+      - El mensaje "spki" must be SPKI formatted string significa que la función espera una llave pública en un formato específico llamado SubjectPublicKeyInfo (SPKI), pero probablemente le estás pasando una llave en formato PKCS#1 (o incluso una llave privada por error).
+
+      - ¿Por qué ocurre esto?
+      - Si seguiste los comandos anteriores, generaste una llave privada. El error ocurre porque estás intentando usar un método que espera una llave pública, y además la quiere en el estándar "moderno" (SPKI/PKCS#8).
+
+      - La Solución: Generar la llave pública correcta
+      - Para corregir el error, necesitas extraer la llave pública de tu archivo private.pem y asegurarte de que use el formato SPKI. Ejecuta este comando:
+        ```bash
+          openssl rsa -in private.pem -pubout -out public_spki.pem
+        ```
+  - Aclaraciones 
+
+    - **Mensaje: "Entró al auth-server /authorize"**
+      - Este mensaje se dispara cuando el usuario hace clic en "Login" en tu aplicación cliente.
+        - **Acción del Cliente:** En index_client.js, al entrar a la ruta /login, el servidor genera el **code_challenge** y redirige al navegador del usuario hacia **http://localhost:3000/authorize**.
+        - **Acción del Auth Server:** El servidor de autorización recibe esa petición GET. En ese instante, se ejecuta el console.log dentro de la ruta app.get("/authorize", ...) en index_auth.js.
+        - **Propósito:** Validar al cliente y generar el Código de Autorización temporal que se devuelve al cliente mediante una redirección.
+    
+    - **Mensaje: "Entró al auth-server /token"**
+      - Este mensaje ocurre automáticamente segundos después, una vez que el cliente ya tiene el código.
+        - **Acción del Cliente:** Tras la redirección exitosa, el navegador llega a la ruta /callback en index_client.js. Allí, el servidor cliente toma el code recibido y hace una petición interna (POST) hacia http://localhost:3000/token.
+        - **Acción del Auth Server:** El servidor de autorización recibe esta petición POST. En ese momento, se ejecuta el console.log dentro de app.post("/token", ...) en index_auth.js.
+        - **Propósito:** Intercambiar el código temporal (y verificar el code_verifier de PKCE) por los tokens definitivos: el Access Token (JWT) y el Refresh Token.
+    
+    - **Resumen del flujo cronológico**
+      - Usuario pulsa Login en el Cliente (:4000).
+      - Auth Server (:3000) recibe /authorize --> Aparece el primer mensaje.
+      - Auth Server redirige al Cliente con un código.
+      - Cliente recibe el código y llama por detrás al Auth Server (/token).
+      - Auth Server recibe /token --> Aparece el segundo mensaje.
+      - Auth Server entrega el JWT al Cliente.
+
 - **Resource-Server**
   - What we can do with this one is that and now we'll have to have this server is the protecte API. It will like kind of read authorization bearer token. it will fetch the JWKS from author server. It will also verify token signature plus issuer plus audience plus expiry all of that kind of good stuff. Also allow requist only if token is valid. so We´ll have to install the dependencies.
 
   - Crear carpeta *resource-server* <code>mkdir resource-server</code>
   - Crear package.json <code>pnpm init</code>
   - Agregar al package.json el type: <code>"type": "module"</code>
-  - Agregar script <code>""start": "node index.js"</code>
+  - Agregar script 
+    ```json
+      "scripts": {
+        "start": "node index_resoruce_server.js",
+        "dev": "node --watch index_resoruce_server.js"
+      },
+    ```
   - Agregar paquetes 
     ```bash
         pnpm add express jose
@@ -387,13 +452,50 @@
 
   - Actualizar index.js
     ```js
+    ```
+  
+  - Errores
+    - Al iniciar el servidor, me despliega el mensaje: 
+      - Ejecutando middleware de resource-server requireScope
+      - Resource Server running on http://localhost:5000
+      
+      - El motivo por el cual ves ese mensaje de "Ejecutando..." en la consola apenas inicias el servidor (antes de que alguien haga una petición) es por la naturaleza de las funciones de orden superior en JavaScript.
+
+      - ¿Qué está pasando exactamente?
+      - En tu código, requireScope no es un middleware común, sino una función que retorna un middleware.
+
+      - El proceso paso a paso:
+        1.- Arranque del servidor (node index.js): Node lee tu archivo y llega a la línea donde defines la ruta: app.get("/api/profile", requireAuth, requireScope("api.read"), ...).
+
+        2.- Llamada inmediata: Para configurar la ruta, Node tiene que ejecutar la función requireScope("api.read") para obtener la función interna (el middleware) que se quedará guardada en la ruta.
+
+        3.- El Console.log: Como pusiste el console.log dentro de la función principal y no dentro de la función retornada, se dispara en el momento de la configuración, es decir, al nacer el proceso.
+
+        4.- Configuración terminada: Una vez ejecutada, la función devuelve el middleware real y el servidor termina de subir.
+
+      - Motivo no se ejecuta requireAuth
+        - la llamas así: requireScope("api.read") con paréntesis, , JavaScript ejecuta la función inmediatamente en el momento en que se lee el archivo para poder obtener el resultado (el middleware real).
+        - requireAuth es una "Referencia de Función"
+          - Llamada sin paréntesis. Aquí no estás ejecutando la función; simplemente le estás diciendo a Express: "Cuando alguien visite esta ruta, ejecuta esta función que tengo guardada aquí".
+
+      - ¿Cómo corregirlo?
+        Si lo que quieres es ver ese mensaje solo cuando un usuario intente acceder a la ruta, debes mover el console.log dentro de la función que se retorna:
+
+Analicemos esta parte de tu archivo index.js:
+
 - **Client-App**
   - Client-app
 
   - Crear carpeta *client-app* <code>mkdir client-app</code>
   - Crear package.json <code>pnpm init</code>
   - Agregar al package.json el type: <code>"type": "module"</code>
-  - Agregar script <code>""start": "node index.js"</code>
+  - Agregar script 
+    ```json
+      "scripts": {
+        "start": "node index_client_app.js",
+        "dev": "node --watch index_client_app.js"
+      },
+    ```
   - Agregar paquetes 
     ```bash
         pnpm add express axios cookie-parser
