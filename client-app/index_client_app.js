@@ -1,8 +1,9 @@
+// Este código corresponde a un client-app.
 // 1. Importaciones y Configuración Inicial
 import express from "express"; // Importa el framework web para crear el servidor.
 import cookieParser from "cookie-parser"; // Middleware para leer y manipular cookies del navegador.
 import axios from "axios"; // Librería para realizar peticiones HTTP a otros servidores.
-import { randomBytes, createHash } from "crypto"; // Funciones nativas de Node para seguridad y criptografía.
+import { randomBytes, createHash } from "node:crypto"; // Funciones nativas de Node para seguridad y criptografía.
 
 const app = express();
 app.use(cookieParser()); // Habilita el soporte de cookies en la aplicación.
@@ -101,7 +102,7 @@ app.get("/callback", async (req, res) => {
     { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
   );
 
-  const { access_token, refresh_token } = tokenRes.data;
+  const { access_token, refresh_token, expires_in } = tokenRes.data;
 
   // Guarda los tokens obtenidos en cookies para mantener la sesión del usuario.
   res.cookie("access_token", access_token, { httpOnly: true });
@@ -111,7 +112,15 @@ app.get("/callback", async (req, res) => {
   res.clearCookie("code_verifier");
   res.clearCookie("oauth_state");
 
-  res.redirect("/profile"); // Va a la página de perfil.
+  res.send(`
+    <h3>Logged in!</h3>
+    <p>Access token expires in ${expires_in} seconds.</p>
+    <a href="/profile">Call Protected API</a>
+    <br /><br />
+    <a href="/refresh">Refresh Access Token</a>
+  `);
+
+  //res.redirect("/profile"); // Va a la página de perfil.
 });
 
 app.get("/profile", async (req, res) => {
@@ -119,12 +128,15 @@ app.get("/profile", async (req, res) => {
   if (!accessToken) return res.redirect("/");
 
   try {
+    console.log(`Inicio profile.. ${RESOURCE_SERVER}/api/profile`);
     const apiRes = await axios.get(`${RESOURCE_SERVER}/api/profile`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     res.send(`<pre>${JSON.stringify(apiRes.data, null, 2)}</pre>`);
   } catch (err) {
+    console.log("Ejecutando en client-app /profile en el primer catch ");
+    //console.log(err);
     const msg = err?.response?.data
       ? JSON.stringify(err.response.data)
       : err.message;
