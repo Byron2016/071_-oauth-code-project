@@ -19,7 +19,7 @@ clients.set("demo-client", {
   redirectUris: ["http://localhost:4000/callback"],
 });
 
-const PRIVATE_KEY_PEM = fs.readFileSync("./private.pem", "utf8");
+const PRIVATE_KEY_PEM = fs.readFileSync("./keys/private.pem", "utf8");
 //const PUBLIC_KEY_PEM = fs.readFileSync("./public.pem", "utf8");
 
 const ISSUER = "http://localhost:3000";
