@@ -24,6 +24,7 @@ const JWKS = createRemoteJWKSet(JWKS_URL);
  * Se encarga de interceptar la petición y verificar si el usuario está autenticado.
  */
 async function requireAuth(req, res, next) {
+  console.log(">>>>Ejecutando middleware de resource-server requireAuth");
   const auth = req.headers.authorization; // Busca el encabezado "Authorization".
   // Verifica si el encabezado existe y si usa el esquema "Bearer ".
   if (!auth || !auth.startsWith("Bearer ")) {
@@ -37,16 +38,28 @@ async function requireAuth(req, res, next) {
     // 1. Verifica la firma con las llaves del JWKS.
     // 2. Revisa que no haya expirado.
     // 3. Comprueba que el ISSUER y AUDIENCE sean correctos.
-    const { payLoad } = await jwtVerify(token, JWKS, {
+    console.log(`-->resource-server requireAuth`);
+    //console.log(`token: ${token} `);
+    console.log(`jwks: ${JWKS} `);
+    console.log(`issuer: ${ISSUER} `);
+    console.log(`audience: ${AUDIENCE}`);
+    const { payload } = await jwtVerify(token, JWKS, {
       issuer: ISSUER,
       audience: AUDIENCE,
     });
-
+    console.log("-->Luego de  const { payLoad }");
+    console.log(payload);
     // Si todo es correcto, guarda la información del usuario (payload) dentro del objeto 'req'
     // para que las siguientes funciones puedan usarla.
-    req.user = payLoad;
+    req.user = payload;
+    console.log(req.user);
+    console.log("--> resource-server requireAuth antes next()");
     next(); // Permite que la petición continúe al siguiente paso.
   } catch (err) {
+    console.log(
+      "Ejecutando middleware de resource-server requireAuth en el catch con error"
+    );
+    console.log(`error: ${err}`);
     // Si el token es falso, expiró o está mal formado, devuelve un error.
     return res
       .status(401)
@@ -62,9 +75,11 @@ async function requireAuth(req, res, next) {
 function requireScope(scope) {
   return (req, res, next) => {
     // Convierte el string de scopes del token (ej: "api.read profile") en un array para buscar fácilmente.
+    console.log(">>>>Ejecutando middleware de resource-server requireScope");
     const scopes = String(req.user?.scope || "")
       .split(" ")
       .filter(Boolean);
+    console.log(`scopes: ${scopes}`);
 
     // Si el array de scopes del usuario no incluye el scope requerido por la ruta, deniega el acceso.
     if (!scopes.includes(scope)) {
@@ -72,6 +87,7 @@ function requireScope(scope) {
         .status(403)
         .json({ error: "insufficient_scope", required: scope }); // 403 significa "Prohibido" (autenticado pero sin permiso).
     }
+    console.log("--> resource-server requireScope antes next()");
     next(); // El usuario tiene permiso, continúa a la ruta.
   };
 }
@@ -82,6 +98,9 @@ function requireScope(scope) {
  */
 app.get("/api/profile", requireAuth, requireScope("api.read"), (req, res) => {
   // Si llegamos aquí, el token es válido y el permiso existe.
+  console.log(
+    "1.- Ejecutando /api/profile luego de los middlewares requireAuth, requireScope"
+  );
   res.json({
     message: "Protected profile data",
     user: {
