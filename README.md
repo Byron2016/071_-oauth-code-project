@@ -378,6 +378,7 @@
   - Crear carpeta *resource-server* <code>mkdir resource-server</code>
   - Crear package.json <code>pnpm init</code>
   - Agregar al package.json el type: <code>"type": "module"</code>
+  - Agregar script <code>""start": "node index.js"</code>
   - Agregar paquetes 
     ```bash
         pnpm add express jose
