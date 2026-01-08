@@ -146,7 +146,9 @@ app.get("/profile", async (req, res) => {
 
     res.send(`<pre>${JSON.stringify(apiRes.data, null, 2)}</pre>`);
   } catch (err) {
-    const msg = err?.response?.data ? JSON.stringify(err.response.data) : err.message;
+    const msg = err?.response?.data
+      ? JSON.stringify(err.response.data)
+      : err.message;
     res.status(500).send(`API call failed: ${msg}`);
   }
 });
@@ -177,10 +179,6 @@ app.get("/refresh", async (req, res) => {
 });
 
 // Inicia el servidor en el puerto 4000.
-app.listen(4000, () => {
-  console.log("Client App running on http://localhost:4000");
-});
-
 app.listen(4000, () => {
   console.log("Client App running on http://localhost:4000");
 });
