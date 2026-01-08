@@ -1,3 +1,4 @@
+// Este código corresponde a un Servidor de Authorización
 import express from "express";
 import bodyParser from "body-parser";
 import cookieParser from "cookie-parser";
@@ -19,8 +20,8 @@ clients.set("demo-client", {
   redirectUris: ["http://localhost:4000/callback"],
 });
 
-const PRIVATE_KEY_PEM = fs.readFileSync("./keys/private.pem", "utf8");
-//const PUBLIC_KEY_PEM = fs.readFileSync("./public.pem", "utf8");
+const PRIVATE_KEY_PEM = fs.readFileSync("./keys/private_pkcs8.pem", "utf8");
+const PUBLIC_KEY_PEM = fs.readFileSync("./keys/public_spki.pem", "utf8");
 
 const ISSUER = "http://localhost:3000";
 const KEY_ID = "demo-key-1";
@@ -50,6 +51,7 @@ function getDemoUser() {
 }
 
 app.get("/authorize", (req, res) => {
+  console.log(`Entró al auth-server /authorize`);
   const {
     response_type,
     client_id,
@@ -103,6 +105,7 @@ app.get("/authorize", (req, res) => {
  * - grant_type=refresh_token
  */
 app.post("/token", async (req, res) => {
+  console.log(`Entró al auth-server /token`);
   const { grant_type } = req.body;
 
   if (grant_type === "authorization_code") {
@@ -202,11 +205,14 @@ app.post("/token", async (req, res) => {
  * Resource servers fetch public keys here to validate JWT signatures.
  */
 app.get("/.well-known/jwks.json", async (req, res) => {
-  const privateKey = await importSPKI(PRIVATE_KEY_PEM, "RS256");
+  console.log(`Entró al auth-server /.well-known/jwks.json`);
+  //const privateKey = await importSPKI(PRIVATE_KEY_PEM, "RS256");
 
   // jose export JWK from a key object, but we need public JWK
   // For tutorial simplicity, jose can export from private key too (it includes public parts)
-  const jwk = await exportJWK(privateKey); //25.24
+  //const jwk = await exportJWK(privateKey); //25.24
+  const publicKey = await importSPKI(PUBLIC_KEY_PEM, "RS256");
+  const jwk = await exportJWK(publicKey);
 
   jwk.use = "sig";
   jwk.alg = "RS256";
