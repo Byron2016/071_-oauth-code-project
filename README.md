@@ -385,103 +385,33 @@
 
   - Actualizar index.js
     ```js
-      // Este código corresponde a un Servidor de Recursos (API). Su función es proteger datos privados y solo entregarlos si el cliente presenta un Access Token (JWT) válido, emitido por el servidor de autorización que analizamos anteriormente.
+- **Client-App**
+  - Client-app
 
-      // IMPORTACIONES
-      import express from "express"; // Framework para crear el servidor y definir las rutas de la API.
-
-      // jwtVerify: para validar la firma del token.
-      // createRemoteJWKSet: para obtener la llave pública automáticamente desde el servidor de identidad.
-      import { jwtVerify, createRemoteJWKSet } from "jose";
-
-      const app = express();
-      app.use(express.json()); // Middleware para que la API pueda entender cuerpos de peticiones en formato JSON.
-
-      // CONFIGURACIÓN DE SEGURIDAD
-      const ISSUER = "http://localhost:3000"; // La URL del servidor que emitió el token (debe coincidir exactamente).
-      const AUDIENCE = "demo-client"; // El ID del cliente para el que fue emitido el token (evita que un token de la App A se use en la App B).
-      const JWKS_URL = new URL("http://localhost:3000/.well-known/jwks.json"); // Dirección donde el servidor de recursos baja la llave pública para verificar tokens.
-
-      // Crea un conjunto de llaves remotas. Esto permite que el servidor valide el JWT sin tener la llave guardada localmente;
-      // la descarga de la URL y la mantiene en caché.
-      const JWKS = createRemoteJWKSet(JWKS_URL);
-
-      /**
-       * MIDDLEWARE: requireAuth
-       * Se encarga de interceptar la petición y verificar si el usuario está autenticado.
-       */
-      async function requireAuth(req, res, next) {
-        const auth = req.headers.authorization; // Busca el encabezado "Authorization".
-        // Verifica si el encabezado existe y si usa el esquema "Bearer ".
-        if (!auth || !auth.startsWith("Bearer ")) {
-          return res.status(401).json({ error: "missing_token" }); // Si no hay token, detiene la petición con error 401 (No autorizado).
-        }
-
-        const token = auth.slice("Bearer ".length); // Extrae solo la cadena del token (quita la palabra "Bearer ").
-
-        try {
-          // VALIDA EL TOKEN:
-          // 1. Verifica la firma con las llaves del JWKS.
-          // 2. Revisa que no haya expirado.
-          // 3. Comprueba que el ISSUER y AUDIENCE sean correctos.
-          const { payLoad } = await jwtVerify(token, JWKS, {
-            issuer: ISSUER,
-            audience: AUDIENCE,
-          });
-
-          // Si todo es correcto, guarda la información del usuario (payload) dentro del objeto 'req'
-          // para que las siguientes funciones puedan usarla.
-          req.user = payLoad;
-          next(); // Permite que la petición continúe al siguiente paso.
-        } catch (err) {
-          // Si el token es falso, expiró o está mal formado, devuelve un error.
-          return res
-            .status(401)
-            .json({ error: "invalid_token", message: err.message });
-        }
-      }
-
-      /**
-       * MIDDLEWARE: requireScope
-       * Verifica si el usuario tiene permiso (permisos específicos llamados 'scopes') para hacer una acción.
-       */
-
-      function requireScope(scope) {
-        return (req, res, next) => {
-          // Convierte el string de scopes del token (ej: "api.read profile") en un array para buscar fácilmente.
-          const scopes = String(req.user?.scope || "")
-            .split(" ")
-            .filter(Boolean);
-
-          // Si el array de scopes del usuario no incluye el scope requerido por la ruta, deniega el acceso.
-          if (!scopes.includes(scope)) {
-            return res
-              .status(403)
-              .json({ error: "insufficient_scope", required: scope }); // 403 significa "Prohibido" (autenticado pero sin permiso).
-          }
-          next(); // El usuario tiene permiso, continúa a la ruta.
-        };
-      }
-
-      /**
-       * RUTA PROTEGIDA: /api/profile
-       * Esta ruta requiere que el usuario esté autenticado Y tenga el permiso "api.read".
-       */
-      app.get("/api/profile", requireAuth, requireScope("api.read"), (req, res) => {
-        // Si llegamos aquí, el token es válido y el permiso existe.
-        res.json({
-          message: "Protected profile data",
-          user: {
-            sub: req.user.sub, // ID único del usuario.
-            name: req.user.name, // Nombre del usuario (extraído del JWT).
-            email: req.user.email, // Email del usuario (extraído del JWT).
-            scope: req.user.scope, // Scopes que tiene permitidos.
-          },
-        });
-      });
-
-      // El servidor de recursos corre en un puerto distinto (5000) para no chocar con el de autorización (3000).
-      app.listen(5000, () => {
-        console.log("Resource Server running on http://localhost:5000");
-      });
+  - Crear carpeta *client-app* <code>mkdir client-app</code>
+  - Crear package.json <code>pnpm init</code>
+  - Agregar al package.json el type: <code>"type": "module"</code>
+  - Agregar paquetes 
+    ```bash
+        pnpm add express axios cookie-parser
     ```
+  - Agregar index.js
+
+  - Actualizar index.js
+    ```js
+    ```
+
+  - Resumen del flujo:
+    - El usuario hace clic en Login.
+
+    - El cliente genera un secreto (verifier) y un desafío (challenge).
+
+    - Redirige al usuario al servidor de autenticación.
+
+    - El usuario se loguea y vuelve al cliente con un code.
+
+    - El cliente envía ese code + el verifier original al servidor.
+
+    - El servidor valida que el verifier coincide con el challenge inicial y entrega los tokens.
+
+    - El cliente usa el access_token para pedir datos a la API de perfil.
