@@ -1,10 +1,10 @@
 // Este código corresponde a un Servidor de Authorización
+import { config } from "./config.js";
 import express from "express";
 import bodyParser from "body-parser";
 import cookieParser from "cookie-parser";
 import { randomBytes, createHash } from "node:crypto";
 import { SignJWT, exportJWK, importPKCS8, importSPKI } from "jose";
-import fs from "node:fs";
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -15,16 +15,16 @@ const clients = new Map();
 const authorizationCodes = new Map();
 const refreshTokens = new Map();
 
-clients.set("demo-client", {
-  client_id: "demo-client",
-  redirectUris: ["http://localhost:4000/callback"],
+clients.set(config.clientId, {
+  client_id: config.clientId,
+  redirectUris: config.redirectUri.split(","), // Ya es un array, no necesita []
 });
 
-const PRIVATE_KEY_PEM = fs.readFileSync("./keys/private_pkcs8.pem", "utf8");
-const PUBLIC_KEY_PEM = fs.readFileSync("./keys/public_spki.pem", "utf8");
+const PRIVATE_KEY_PEM = config.keys.private;
+const PUBLIC_KEY_PEM = config.keys.public;
 
-const ISSUER = "http://localhost:3000";
-const KEY_ID = "demo-key-1";
+const ISSUER = config.issuer;
+const KEY_ID = config.key_id;
 
 function base64url(input) {
   return (
@@ -82,13 +82,16 @@ app.get("/authorize", (req, res) => {
   const user = getDemoUser();
 
   const code = generateCode();
+
+  const AUTH_CODE_TTL = parseInt(config.auth_code_expires_ms);
+
   authorizationCodes.set(code, {
     clientId: client_id,
     redirectUri: redirect_uri,
     codeChallenge: code_challenge,
     scope,
     user,
-    expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
+    expiresAt: Date.now() + AUTH_CODE_TTL, // x miliseconds
   });
 
   const redirect = new URL(redirect_uri);
@@ -153,20 +156,29 @@ app.post("/token", async (req, res) => {
       .setAudience(client_id)
       .setSubject(record.user.sub)
       .setIssuedAt()
-      .setExpirationTime("15m")
+      .setExpirationTime(config.access_token_duration)
       .sign(privateKey);
+
+    // Primero conviertes los días del .env a milisegundos
+    const REFRESH_TTL_MS =
+      parseInt(process.env.REFRESH_TOKEN_EXPIRES_DAYS || 30) *
+      24 *
+      60 *
+      60 *
+      1000;
 
     const refresh_token = generateCode();
     refreshTokens.set(refresh_token, {
       sub: record.user.sub,
       scope: record.scope,
       clientId: client_id,
+      expiresAt: Date.now() + REFRESH_TTL_MS,
     });
 
     return res.json({
       access_token: accessToken,
       token_type: "Bearer",
-      expires_in: 900,
+      expires_in: config.access_token_expires_in_sec,
       refresh_token,
       scope: record.scope,
     });
@@ -187,13 +199,13 @@ app.post("/token", async (req, res) => {
       .setAudience(client_id)
       .setSubject(record.sub)
       .setIssuedAt()
-      .setExpirationTime("15m")
+      .setExpirationTime(config.access_token_expires_in_sec)
       .sign(privateKey);
 
     return res.json({
       access_token: accessToken,
       token_type: "Bearer",
-      expires_in: 900,
+      expires_in: config.access_token_expires_in_sec,
     });
   }
 
@@ -223,6 +235,6 @@ app.get("/.well-known/jwks.json", async (req, res) => {
   });
 });
 
-app.listen(3000, () => {
-  console.log("Auth Server running on http://localhost:3000");
+app.listen(config.port, () => {
+  console.log(`🚀 Auth Server running on ${config.issuer}`);
 });
