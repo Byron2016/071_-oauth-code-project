@@ -164,6 +164,7 @@ app.post("/token", async (req, res) => {
   }
 
   if (grant_type === "refresh_token") {
+    console.log(`Entró al auth-server /token refresh_token`);
     const { refresh_token, client_id } = req.body;
     const record = refreshTokens.get(refresh_token);
     if (!record) return res.status(400).json({ error: "invalid_grant" });
@@ -172,13 +173,16 @@ app.post("/token", async (req, res) => {
 
     const privateKey = await importPKCS8(PRIVATE_KEY_PEM, "RS256");
 
+    console.log(
+      `Entró al auth-server /token refresh_token antes const accessToken = await...`
+    );
     const accessToken = await new SignJWT({ scope: record.scope })
       .setProtectedHeader({ alg: "RS256", kid: KEY_ID })
       .setIssuer(ISSUER)
       .setAudience(client_id)
       .setSubject(record.sub)
       .setIssuedAt()
-      .setExpirationTime(config.access_token_expires_in_sec)
+      .setExpirationTime(config.access_token_duration) //15m
       .sign(privateKey);
 
     return res.json({
