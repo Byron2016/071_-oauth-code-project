@@ -11,6 +11,8 @@ import {
   generateState,
 } from "./utils/crypto_utils.js";
 
+import { loginSuccessTemplate } from "./utils/utils.js";
+
 const app = express();
 app.use(cookieParser()); // Habilita el soporte de cookies en la aplicación.
 
@@ -89,15 +91,19 @@ app.get("/callback", async (req, res) => {
   res.clearCookie("code_verifier");
   res.clearCookie("oauth_state");
 
-  res.send(`
-    <h3>Logged in!</h3>
-    <p>Access token expires in ${expires_in} seconds.</p>
-    <a href="/profile">Call Protected API</a>
-    <br /><br />
-    <a href="/refresh">Refresh Access Token</a>
-  `);
+  // res.send(`
+  //   <h3>Logged in!</h3>
+  //   <p>Access token expires in ${expires_in} seconds.</p>
+  //   <a href="/profile">Call Protected API</a>
+  //   <br /><br />
+  //   <a href="/refresh">Refresh Access Token</a>
+  // `);
 
   //res.redirect("/profile"); // Va a la página de perfil.
+
+  const ahora = new Date().toLocaleString(); // Formato: "9/1/2026, 16:07:20"
+
+  res.send(loginSuccessTemplate(expires_in));
 });
 
 // new5. Uso de Tokens y Refresco
@@ -144,10 +150,12 @@ app.get("/refresh", async (req, res) => {
   // Actualiza la cookie con el nuevo token de acceso.
   res.cookie("access_token", tokenRes.data.access_token, { httpOnly: true });
 
-  res.send(`
-    <h3>Refreshed Access Token!</h3>
-    <a href="/profile">Call Protected API Again</a>
-  `);
+  // res.send(`
+  //   <h3>Refreshed Access Token!</h3>
+  //   <a href="/profile">Call Protected API Again</a>
+  // `);
+
+  res.send(loginSuccessTemplate(tokenRes.data.expires_in));
 });
 
 // Inicia el servidor en el puerto 4000.
