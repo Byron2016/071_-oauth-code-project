@@ -4,7 +4,12 @@ import { config } from "./config.js";
 import express from "express"; // Importa el framework web para crear el servidor.
 import cookieParser from "cookie-parser"; // Middleware para leer y manipular cookies del navegador.
 import axios from "axios"; // Librería para realizar peticiones HTTP a otros servidores.
-import { randomBytes, createHash } from "node:crypto"; // Funciones nativas de Node para seguridad y criptografía.
+
+import {
+  generateVerifier,
+  codeChallengeS256,
+  generateState,
+} from "./utils/crypto_utils.js";
 
 const app = express();
 app.use(cookieParser()); // Habilita el soporte de cookies en la aplicación.
@@ -14,35 +19,6 @@ const RESOURCE_SERVER = config.resoruce_server_url; // URL de la API que tiene l
 
 const CLIENT_ID = config.clientId; // Identificador de esta aplicación registrado en el servidor de auth.
 const REDIRECT_URI = config.redirectUri; // URL a la que el servidor de auth enviará el código.
-
-// Helpers
-// 2. Funciones de Ayuda (PKCE y Seguridad)
-// Estas funciones preparan el terreno para el flujo PKCE, que evita que un atacante intercepte el código de autorización.
-
-// Convierte un buffer en una cadena Base64 segura para URLs (sin +, / o =).
-function base64url(input) {
-  return input
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-}
-
-// Genera el "code_verifier": un secreto aleatorio y único para esta sesión de login.
-function generateVerifier() {
-  return base64url(randomBytes(32));
-}
-
-// Crea el "code_challenge": un hash SHA256 del verifier. Se envía al servidor al inicio.
-function codeChallengeS256(verifier) {
-  const hash = createHash("sha256").update(verifier).digest();
-  return base64url(hash);
-}
-
-// Genera un valor aleatorio "state" para prevenir ataques CSRF (falsificación de peticiones).
-function generateState() {
-  return base64url(randomBytes(16));
-}
 
 // 3. Ruta de Inicio y Login
 // Ruta principal: muestra un simple enlace para iniciar sesión.
@@ -124,11 +100,14 @@ app.get("/callback", async (req, res) => {
   //res.redirect("/profile"); // Va a la página de perfil.
 });
 
+// new5. Uso de Tokens y Refresco
+// Ruta protegida que consume datos del Resource Server.
 app.get("/profile", async (req, res) => {
   const accessToken = req.cookies.access_token;
-  if (!accessToken) return res.redirect("/");
+  if (!accessToken) return res.redirect("/"); // Si no hay token, no está logueado.
 
   try {
+    // Llama a la API externa enviando el Access Token en el header Authorization.
     console.log(`Inicio profile.. ${RESOURCE_SERVER}/api/profile`);
     const apiRes = await axios.get(`${RESOURCE_SERVER}/api/profile`, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -145,29 +124,9 @@ app.get("/profile", async (req, res) => {
   }
 });
 
-// 5. Uso de Tokens y Refresco
-// Ruta protegida que consume datos del Resource Server.
-app.get("/profile", async (req, res) => {
-  const accessToken = req.cookies.access_token;
-  if (!accessToken) return res.redirect("/"); // Si no hay token, no está logueado.
-
-  try {
-    // Llama a la API externa enviando el Access Token en el header Authorization.
-    const apiRes = await axios.get(`${RESOURCE_SERVER}/api/profile`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    res.send(`<pre>${JSON.stringify(apiRes.data, null, 2)}</pre>`);
-  } catch (err) {
-    const msg = err?.response?.data
-      ? JSON.stringify(err.response.data)
-      : err.message;
-    res.status(500).send(`API call failed: ${msg}`);
-  }
-});
-
 // Ruta para renovar el Access Token cuando este caduca.
 app.get("/refresh", async (req, res) => {
+  console.log(`Entro al index_client_app app.get("/refresh"`);
   const refreshToken = req.cookies.refresh_token;
   if (!refreshToken) return res.redirect("/");
 
