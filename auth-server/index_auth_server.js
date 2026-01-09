@@ -1,54 +1,32 @@
 // Este código corresponde a un Servidor de Authorización
-import { config } from "./config.js";
+import { config } from "./config/env.js";
 import express from "express";
 import bodyParser from "body-parser";
 import cookieParser from "cookie-parser";
-import { randomBytes, createHash } from "node:crypto";
 import { SignJWT, exportJWK, importPKCS8, importSPKI } from "jose";
+
+import { sha256Base64url, generateCode } from "./utils/crypto_utils.js";
+import {
+  clients,
+  authorizationCodes,
+  refreshTokens,
+  initializeClients, // Mirar en el mock la importancia de esto.
+  getDemoUser,
+} from "./data/mock_db.js";
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(cookieParser());
 
-const clients = new Map();
-const authorizationCodes = new Map();
-const refreshTokens = new Map();
-
-clients.set(config.clientId, {
-  client_id: config.clientId,
-  redirectUris: config.redirectUri.split(","), // Ya es un array, no necesita []
-});
+// Inicialización de datos
+initializeClients(config);
 
 const PRIVATE_KEY_PEM = config.keys.private;
 const PUBLIC_KEY_PEM = config.keys.public;
 
 const ISSUER = config.issuer;
 const KEY_ID = config.key_id;
-
-function base64url(input) {
-  return (
-    input
-      .toString("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      //.replace(/\//g, "=")
-      .replace(/=+$/g, "")
-  );
-}
-
-function sha256Base64url(str) {
-  const hash = createHash("sha256").update(str).digest();
-  return base64url(hash);
-}
-
-function generateCode() {
-  return base64url(randomBytes(32));
-}
-
-function getDemoUser() {
-  return { sub: "alice", name: "Alice Example", email: "alice@example.com" };
-}
 
 app.get("/authorize", (req, res) => {
   console.log(`Entró al auth-server /authorize`);
@@ -79,12 +57,13 @@ app.get("/authorize", (req, res) => {
 
   // Normally: show login + consent UI.
   // For tutorial simplicity: auto-login + auto-consent.
-  const user = getDemoUser();
+  const user = getDemoUser(); // Ahora viene de mock_db
 
   const code = generateCode();
 
   const AUTH_CODE_TTL = parseInt(config.auth_code_expires_ms);
 
+  // authorizationCodes está disponible por la importación del mock_db
   authorizationCodes.set(code, {
     clientId: client_id,
     redirectUri: redirect_uri,
