@@ -1,5 +1,6 @@
 // Este código corresponde a un client-app.
 // 1. Importaciones y Configuración Inicial
+import { config } from "./config.js";
 import express from "express"; // Importa el framework web para crear el servidor.
 import cookieParser from "cookie-parser"; // Middleware para leer y manipular cookies del navegador.
 import axios from "axios"; // Librería para realizar peticiones HTTP a otros servidores.
@@ -8,11 +9,11 @@ import { randomBytes, createHash } from "node:crypto"; // Funciones nativas de N
 const app = express();
 app.use(cookieParser()); // Habilita el soporte de cookies en la aplicación.
 
-const AUTH_SERVER = "http://localhost:3000"; // URL del servidor de identidad (donde el usuario se loguea).
-const RESOURCE_SERVER = "http://localhost:5000"; // URL de la API que tiene los datos protegidos.
+const AUTH_SERVER = config.auth_server_url; // URL del servidor de identidad (donde el usuario se loguea).
+const RESOURCE_SERVER = config.resoruce_server_url; // URL de la API que tiene los datos protegidos.
 
-const CLIENT_ID = "demo-client"; // Identificador de esta aplicación registrado en el servidor de auth.
-const REDIRECT_URI = "http://localhost:4000/callback"; // URL a la que el servidor de auth enviará el código.
+const CLIENT_ID = config.clientId; // Identificador de esta aplicación registrado en el servidor de auth.
+const REDIRECT_URI = config.redirectUri; // URL a la que el servidor de auth enviará el código.
 
 // Helpers
 // 2. Funciones de Ayuda (PKCE y Seguridad)
@@ -191,6 +192,6 @@ app.get("/refresh", async (req, res) => {
 });
 
 // Inicia el servidor en el puerto 4000.
-app.listen(4000, () => {
-  console.log("Client App running on http://localhost:4000");
+app.listen(config.port, () => {
+  console.log(`🚀 Resource Server running on ${config.client_host}`);
 });
