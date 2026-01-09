@@ -1,6 +1,7 @@
 // Este código corresponde a un Servidor de Recursos (API). Su función es proteger datos privados y solo entregarlos si el cliente presenta un Access Token (JWT) válido, emitido por el servidor de autorización que analizamos anteriormente.
 
 // IMPORTACIONES
+import { config } from "./config.js";
 import express from "express"; // Framework para crear el servidor y definir las rutas de la API.
 
 // jwtVerify: para validar la firma del token.
@@ -11,9 +12,9 @@ const app = express();
 app.use(express.json()); // Middleware para que la API pueda entender cuerpos de peticiones en formato JSON.
 
 // CONFIGURACIÓN DE SEGURIDAD
-const ISSUER = "http://localhost:3000"; // La URL del servidor que emitió el token (debe coincidir exactamente).
-const AUDIENCE = "demo-client"; // El ID del cliente para el que fue emitido el token (evita que un token de la App A se use en la App B).
-const JWKS_URL = new URL("http://localhost:3000/.well-known/jwks.json"); // Dirección donde el servidor de recursos baja la llave pública para verificar tokens.
+const ISSUER = config.issuer_host; // La URL del servidor que emitió el token (debe coincidir exactamente).
+const AUDIENCE = config.audience; // El ID del cliente para el que fue emitido el token (evita que un token de la App A se use en la App B).
+const JWKS_URL = new URL(config.jwks_url); // Dirección donde el servidor de recursos baja la llave pública para verificar tokens.
 
 // Crea un conjunto de llaves remotas. Esto permite que el servidor valide el JWT sin tener la llave guardada localmente;
 // la descarga de la URL y la mantiene en caché.
@@ -113,6 +114,7 @@ app.get("/api/profile", requireAuth, requireScope("api.read"), (req, res) => {
 });
 
 // El servidor de recursos corre en un puerto distinto (5000) para no chocar con el de autorización (3000).
-app.listen(5000, () => {
-  console.log("Resource Server running on http://localhost:5000");
+
+app.listen(config.port, () => {
+  console.log(`🚀 Resource Server running on ${config.resource_host}`);
 });
